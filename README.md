@@ -28,7 +28,9 @@ Copy `.env.example` to `.env.local` and set:
 
 - `SELF_ONBOARD_BACKEND_URL` (e.g. `https://hfg-onboard.onrender.com`)
 - `SELF_ONBOARD_SERVICE_KEY` (optional)
-- `GOOGLE_MAPS_API_KEY` (required for cafe search and place autofill)
+- `USER_ONBOARD_BACKEND_URL` (e.g. `https://hfg-user-onboard.onrender.com`)
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (required for right-side map + drag/search picker)
+- `GOOGLE_MAPS_API_KEY` (optional, only for `/api/google/*` fallback routes)
 
 ## Frontend API Routes (in this project)
 
@@ -37,6 +39,7 @@ Copy `.env.example` to `.env.local` and set:
 - `GET /api/google/cafe-search?q=...`
 - `GET /api/google/cafe-details?placeId=...`
 - `POST /api/self-onboard` (multipart form: payload + document files)
+- `POST /api/users/hash-coins` (body: `{ "amount": 500 }`, auth via `Authorization: Bearer <token>` or `token` in body)
 
 ## Backend Dependencies
 
@@ -45,5 +48,9 @@ Copy `.env.example` to `.env.local` and set:
 - `POST /api/self-onboard/send-email-otp`
 - `POST /api/self-onboard/verify-email-otp`
 - `POST /api/onboard`
+
+`hfg-user-onboard` must expose:
+
+- `POST /api/users/hash-coins`
 
 Mail dispatch remains backend-managed (`hfg-onboard` Flask-Mail config).

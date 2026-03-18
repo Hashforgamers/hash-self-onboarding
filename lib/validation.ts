@@ -17,19 +17,33 @@ export const DEFAULT_AMENITIES = [
   "air_conditioner",
   "food"
 ]
+const ALLOWED_DOC_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"]
+const MAX_DOC_SIZE_BYTES = 8 * 1024 * 1024
 
 function validEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+export function normalizePhone(phone: string) {
+  return (phone || "").replace(/\D/g, "").slice(0, 10)
+}
+
 function validPhone(phone: string) {
-  return /^[0-9]{10,15}$/.test(phone.replace(/\D/g, ""))
+  const normalized = normalizePhone(phone)
+  return /^[6-9][0-9]{9}$/.test(normalized)
 }
 
 function parseHourMinute(value: string) {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value)
   if (!match) return null
   return Number(match[1]) * 60 + Number(match[2])
+}
+
+function validLatLng(lat: string, lng: string) {
+  const latNum = Number(lat)
+  const lngNum = Number(lng)
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false
+  return latNum >= -90 && latNum <= 90 && lngNum >= -180 && lngNum <= 180
 }
 
 export function toPayload(draft: OnboardingDraft): SelfOnboardPayload {
@@ -73,25 +87,41 @@ export function validateStep(
   documents: Partial<Record<DocumentKey, File | null>>
 ): string | null {
   if (step === 0) {
-    if (!draft.ownerName.trim()) return "Owner name is required."
+    if (draft.ownerName.trim().length < 2) return "Owner name must be at least 2 characters."
     if (!validEmail(draft.ownerEmail.trim())) return "Valid owner email is required."
-    if (!validPhone(draft.ownerPhone.trim())) return "Valid owner phone is required."
+    if (!validPhone(draft.ownerPhone.trim())) return "Phone number must be 10 digits (starting from 6-9)."
     if (!draft.emailVerified) return "Please verify owner email with OTP before continuing."
   }
 
   if (step === 1) {
-    if (!draft.cafeName.trim()) return "Cafe name is required."
+    if (draft.cafeName.trim().length < 3) return "Cafe name must be at least 3 characters."
     if (!draft.addressLine1.trim()) return "Address is required."
     if (!draft.city.trim() || !draft.state.trim()) return "City and state are required."
     if (!/^[0-9]{6}$/.test(draft.pincode.trim())) return "Pincode must be 6 digits."
     if (!draft.latitude.trim() || !draft.longitude.trim()) {
       return "Latitude and longitude are required. Use Google search or enter manually."
     }
+    if (!validLatLng(draft.latitude.trim(), draft.longitude.trim())) {
+      return "Latitude/longitude is invalid."
+    }
+    if (draft.website.trim() && !/^https?:\/\/[^\s]+\.[^\s]+/i.test(draft.website.trim())) {
+      return "Website should start with http:// or https://"
+    }
   }
 
   if (step === 2) {
     const totalConsoles = CONSOLE_TYPES.reduce((sum, type) => sum + Number(draft.inventory[type].count || 0), 0)
     if (totalConsoles <= 0) return "At least one console quantity is required."
+    if (totalConsoles > 500) return "Total console quantity looks too high. Please verify."
+
+    for (const type of CONSOLE_TYPES) {
+      const count = Number(draft.inventory[type].count || 0)
+      const rate = Number(draft.inventory[type].ratePerSlot || 0)
+      if (!Number.isInteger(count) || count < 0) return "Console quantity must be a whole number."
+      if (count > 200) return "Console quantity per type cannot exceed 200."
+      if (!Number.isFinite(rate) || rate < 0) return "Rate per slot must be non-negative."
+      if (rate > 100000) return "Rate per slot is too high. Please verify."
+    }
 
     const hasOpenDay = DAY_KEYS.some((day) => draft.schedule[day].isOpen)
     if (!hasOpenDay) return "At least one operating day must be open."
@@ -99,7 +129,9 @@ export function validateStep(
     for (const day of DAY_KEYS) {
       const config = draft.schedule[day]
       if (!config.isOpen) continue
-      if (config.slotDuration <= 0) return "Slot duration must be greater than zero."
+      if (![15, 30, 45, 60, 90, 120].includes(Number(config.slotDuration))) {
+        return "Slot duration must be one of: 15, 30, 45, 60, 90, 120 minutes."
+      }
       if (config.is24Hours) continue
 
       const openMins = parseHourMinute(config.open)
@@ -114,13 +146,21 @@ export function validateStep(
   }
 
   if (step === 3) {
-    if (!draft.businessRegistrationNumber.trim()) {
+    if (draft.businessRegistrationNumber.trim().length < 3) {
       return "Business registration number is required."
     }
 
     const missingDocs = DOCUMENT_KEYS.filter((key) => !documents[key])
     if (missingDocs.length > 0) {
       return "Please upload all required documents."
+    }
+    for (const key of DOCUMENT_KEYS) {
+      const file = documents[key]
+      if (!file) continue
+      const lower = file.name.toLowerCase()
+      const extension = ALLOWED_DOC_EXTENSIONS.find((ext) => lower.endsWith(ext))
+      if (!extension) return `Invalid file type for ${key}.`
+      if (file.size > MAX_DOC_SIZE_BYTES) return `File too large for ${key}. Max 8MB allowed.`
     }
 
     const enabledAmenityCount = Object.values(draft.amenities).filter(Boolean).length

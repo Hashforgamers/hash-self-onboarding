@@ -1,23 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import Image from "next/image"
-import type {
-  CafePlaceDetails,
-  CafeSearchItem,
-  DayKey,
-  DocumentKey,
-  OnboardingDraft,
-  SelfOnboardResponse
-} from "@/lib/types"
+import type { DayKey, DocumentKey, OnboardingDraft, SelfOnboardResponse } from "@/lib/types"
 import {
   CONSOLE_TYPES,
   DAY_KEYS,
   DEFAULT_AMENITIES,
   DOCUMENT_KEYS,
+  normalizePhone,
   toPayload,
   validateStep
 } from "@/lib/validation"
+import MapLocationPicker, { type LocationPayload } from "@/app/components/map-location-picker"
 
 const STEPS = [
   "Email OTP",
@@ -102,11 +97,9 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null)
   const [otpState, setOtpState] = useState<"idle" | "sending" | "sent" | "verifying" | "verified">("idle")
   const [otpMessage, setOtpMessage] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searching, setSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<CafeSearchItem[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<SelfOnboardResponse | null>(null)
+  const mapApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   const openConsoleTotal = useMemo(
     () => CONSOLE_TYPES.reduce((sum, type) => sum + Number(draft.inventory[type].count || 0), 0),
@@ -224,58 +217,20 @@ export default function Page() {
     }
   }
 
-  async function searchCafe() {
-    setError(null)
-    if (searchQuery.trim().length < 3) {
-      setError("Enter at least 3 characters to search cafe.")
-      return
-    }
-
-    setSearching(true)
-    try {
-      const response = await fetch(`/api/google/cafe-search?q=${encodeURIComponent(searchQuery.trim())}`)
-      const data = (await response.json()) as { success?: boolean; items?: CafeSearchItem[]; message?: string }
-      if (!response.ok) {
-        setError(data.message || "Google search failed.")
-        return
-      }
-      setSearchResults(data.items || [])
-    } catch {
-      setError("Network error while searching cafe on Google.")
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  async function chooseCafe(placeId: string) {
-    setError(null)
-    try {
-      const response = await fetch(`/api/google/cafe-details?placeId=${encodeURIComponent(placeId)}`)
-      const data = (await response.json()) as { success?: boolean; details?: CafePlaceDetails; message?: string }
-      if (!response.ok || !data.details) {
-        setError(data.message || "Unable to fetch selected cafe details.")
-        return
-      }
-
-      const details = data.details
-      setDraft((prev) => ({
-        ...prev,
-        googlePlaceId: details.place_id,
-        cafeName: details.name || prev.cafeName,
-        addressLine1: details.street || details.formatted_address,
-        city: details.city || prev.city,
-        state: details.state || prev.state,
-        pincode: details.pincode || prev.pincode,
-        country: details.country || prev.country,
-        latitude: details.latitude !== null ? String(details.latitude) : prev.latitude,
-        longitude: details.longitude !== null ? String(details.longitude) : prev.longitude
-      }))
-      setSearchResults([])
-      setSearchQuery(`${details.name} - ${details.formatted_address}`)
-    } catch {
-      setError("Network error while loading Google place details.")
-    }
-  }
+  const handleMapLocationChange = useCallback((location: LocationPayload) => {
+    setDraft((prev) => ({
+      ...prev,
+      googlePlaceId: location.placeId || prev.googlePlaceId,
+      cafeName: location.name || prev.cafeName,
+      addressLine1: location.address || prev.addressLine1,
+      city: location.city || prev.city,
+      state: location.state || prev.state,
+      pincode: location.pincode || prev.pincode,
+      country: location.country || prev.country,
+      latitude: String(location.lat),
+      longitude: String(location.lng)
+    }))
+  }, [])
 
   function goNext() {
     const validationError = validateStep(draft, step, documents)
@@ -380,8 +335,10 @@ export default function Page() {
                   <input
                     className="input"
                     value={draft.ownerPhone}
-                    onChange={(e) => updateField("ownerPhone", e.target.value)}
-                    placeholder="10 to 15 digits"
+                    onChange={(e) => updateField("ownerPhone", normalizePhone(e.target.value))}
+                    placeholder="10 digit phone number"
+                    inputMode="numeric"
+                    maxLength={10}
                   />
                 </label>
               </div>
@@ -401,8 +358,10 @@ export default function Page() {
                   <input
                     className="input"
                     value={draft.otpCode}
-                    onChange={(e) => updateField("otpCode", e.target.value)}
+                    onChange={(e) => updateField("otpCode", e.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="6 digit OTP"
+                    inputMode="numeric"
+                    maxLength={6}
                   />
                 </label>
               </div>
@@ -426,110 +385,93 @@ export default function Page() {
 
           {step === 1 && (
             <>
-              <div className="row">
-                <label>
-                  <span className="label">Search Cafe On Google</span>
-                  <div className="search-row">
-                    <input
-                      className="input"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Type cafe name and city"
-                    />
-                    <button className="btn ghost" type="button" onClick={searchCafe} disabled={searching}>
-                      {searching ? "Searching..." : "Search"}
-                    </button>
+              <div className="identity-layout">
+                <div>
+                  <div className="row two">
+                    <label>
+                      <span className="label">Cafe Name</span>
+                      <input
+                        className="input"
+                        value={draft.cafeName}
+                        onChange={(e) => updateField("cafeName", e.target.value)}
+                        placeholder="Cafe business name"
+                      />
+                    </label>
+                    <label>
+                      <span className="label">Website (optional)</span>
+                      <input
+                        className="input"
+                        value={draft.website}
+                        onChange={(e) => updateField("website", e.target.value)}
+                        placeholder="https://yourcafe.com"
+                      />
+                    </label>
                   </div>
-                </label>
-                {searchResults.length > 0 && (
-                  <div className="search-results">
-                    {searchResults.map((item) => (
-                      <button
-                        key={item.place_id}
-                        type="button"
-                        className="search-item"
-                        onClick={() => chooseCafe(item.place_id)}
-                      >
-                        <strong>{item.name}</strong>
-                        <span>{item.formatted_address}</span>
-                      </button>
-                    ))}
+
+                  <div className="row">
+                    <label>
+                      <span className="label">Address</span>
+                      <input
+                        className="input"
+                        value={draft.addressLine1}
+                        onChange={(e) => updateField("addressLine1", e.target.value)}
+                        placeholder="Street and area"
+                      />
+                    </label>
                   </div>
-                )}
-              </div>
 
-              <div className="row two">
-                <label>
-                  <span className="label">Cafe Name</span>
-                  <input
-                    className="input"
-                    value={draft.cafeName}
-                    onChange={(e) => updateField("cafeName", e.target.value)}
-                    placeholder="Cafe business name"
-                  />
-                </label>
-                <label>
-                  <span className="label">Website (optional)</span>
-                  <input
-                    className="input"
-                    value={draft.website}
-                    onChange={(e) => updateField("website", e.target.value)}
-                    placeholder="https://yourcafe.com"
-                  />
-                </label>
-              </div>
+                  <div className="row two">
+                    <label>
+                      <span className="label">City</span>
+                      <input className="input" value={draft.city} onChange={(e) => updateField("city", e.target.value)} />
+                    </label>
+                    <label>
+                      <span className="label">State</span>
+                      <input className="input" value={draft.state} onChange={(e) => updateField("state", e.target.value)} />
+                    </label>
+                  </div>
 
-              <div className="row">
-                <label>
-                  <span className="label">Address</span>
-                  <input
-                    className="input"
-                    value={draft.addressLine1}
-                    onChange={(e) => updateField("addressLine1", e.target.value)}
-                    placeholder="Street and area"
-                  />
-                </label>
-              </div>
+                  <div className="row three">
+                    <label>
+                      <span className="label">Pincode</span>
+                      <input
+                        className="input"
+                        value={draft.pincode}
+                        onChange={(e) => updateField("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="6 digits"
+                        inputMode="numeric"
+                        maxLength={6}
+                      />
+                    </label>
+                    <label>
+                      <span className="label">Latitude</span>
+                      <input
+                        className="input"
+                        value={draft.latitude}
+                        onChange={(e) => updateField("latitude", e.target.value)}
+                        placeholder="18.5204"
+                      />
+                    </label>
+                    <label>
+                      <span className="label">Longitude</span>
+                      <input
+                        className="input"
+                        value={draft.longitude}
+                        onChange={(e) => updateField("longitude", e.target.value)}
+                        placeholder="73.8567"
+                      />
+                    </label>
+                  </div>
+                </div>
 
-              <div className="row two">
-                <label>
-                  <span className="label">City</span>
-                  <input className="input" value={draft.city} onChange={(e) => updateField("city", e.target.value)} />
-                </label>
-                <label>
-                  <span className="label">State</span>
-                  <input className="input" value={draft.state} onChange={(e) => updateField("state", e.target.value)} />
-                </label>
-              </div>
-
-              <div className="row three">
-                <label>
-                  <span className="label">Pincode</span>
-                  <input
-                    className="input"
-                    value={draft.pincode}
-                    onChange={(e) => updateField("pincode", e.target.value)}
-                    placeholder="6 digits"
+                <div>
+                  <MapLocationPicker
+                    apiKey={mapApiKey}
+                    initialLat={draft.latitude ? Number(draft.latitude) : undefined}
+                    initialLng={draft.longitude ? Number(draft.longitude) : undefined}
+                    onChange={handleMapLocationChange}
                   />
-                </label>
-                <label>
-                  <span className="label">Latitude</span>
-                  <input
-                    className="input"
-                    value={draft.latitude}
-                    onChange={(e) => updateField("latitude", e.target.value)}
-                    placeholder="18.5204"
-                  />
-                </label>
-                <label>
-                  <span className="label">Longitude</span>
-                  <input
-                    className="input"
-                    value={draft.longitude}
-                    onChange={(e) => updateField("longitude", e.target.value)}
-                    placeholder="73.8567"
-                  />
-                </label>
+                </div>
               </div>
             </>
           )}

@@ -10,6 +10,8 @@ const DOCUMENT_KEYS: DocumentKey[] = [
 ]
 
 const DAY_KEYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+const ALLOWED_DOC_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"]
+const MAX_DOC_SIZE_BYTES = 8 * 1024 * 1024
 
 function to12Hour(time24: string) {
   const [hRaw, mRaw] = String(time24 || "00:00").split(":")
@@ -36,6 +38,54 @@ function parsePayload(raw: FormDataEntryValue | null) {
   }
 }
 
+function parseHourMinute(value: string) {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(value || ""))
+  if (!match) return null
+  return Number(match[1]) * 60 + Number(match[2])
+}
+
+function validatePayload(payload: SelfOnboardPayload) {
+  if ((payload.owner_name || "").trim().length < 2) return "Owner name is required."
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((payload.owner_email || "").trim())) return "Valid email is required."
+  if (!/^[6-9][0-9]{9}$/.test((payload.owner_phone || "").trim())) return "Phone number must be 10 digits."
+  if (!(payload.email_verification_token || "").trim()) return "Email verification token is required."
+  if ((payload.cafe_name || "").trim().length < 3) return "Cafe name is required."
+  if (!(payload.address_line_1 || "").trim()) return "Address is required."
+  if (!(payload.city || "").trim() || !(payload.state || "").trim()) return "City and state are required."
+  if (!/^[0-9]{6}$/.test((payload.pincode || "").trim())) return "Pincode must be 6 digits."
+
+  const lat = Number(payload.latitude)
+  const lng = Number(payload.longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "Latitude and longitude are required."
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return "Latitude/longitude is invalid."
+
+  const totalCount = Object.values(payload.inventory_summary || {}).reduce((sum, details) => {
+    return sum + Number(details.count || 0)
+  }, 0)
+  if (totalCount <= 0) return "At least one console count is required."
+
+  const hasOpenDay = DAY_KEYS.some((day) => payload.schedule?.[day]?.isOpen)
+  if (!hasOpenDay) return "At least one operating day must be open."
+
+  for (const day of DAY_KEYS) {
+    const schedule = payload.schedule?.[day]
+    if (!schedule?.isOpen) continue
+    if (![15, 30, 45, 60, 90, 120].includes(Number(schedule.slotDuration))) {
+      return "Slot duration is invalid."
+    }
+    if (schedule.is24Hours) continue
+    const start = parseHourMinute(schedule.open)
+    const end = parseHourMinute(schedule.close)
+    if (start === null || end === null) return "Invalid operating time format."
+    if (start === end) return "Open and close time cannot be same unless 24h is enabled."
+  }
+
+  if ((payload.business_registration_number || "").trim().length < 3) {
+    return "Business registration number is required."
+  }
+  return null
+}
+
 export async function POST(request: NextRequest) {
   const contentType = request.headers.get("content-type") || ""
   if (!contentType.includes("multipart/form-data")) {
@@ -54,8 +104,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: error || "Invalid payload" }, { status: 400 })
   }
 
-  if (!payload.email_verification_token) {
-    return NextResponse.json({ success: false, message: "Email verification token is required" }, { status: 400 })
+  const payloadValidationError = validatePayload(payload)
+  if (payloadValidationError) {
+    return NextResponse.json({ success: false, message: payloadValidationError }, { status: 400 })
   }
 
   const uploadedDocs = Object.fromEntries(
@@ -63,9 +114,23 @@ export async function POST(request: NextRequest) {
   ) as Record<DocumentKey, FormDataEntryValue | null>
 
   for (const key of DOCUMENT_KEYS) {
-    if (!(uploadedDocs[key] instanceof File)) {
+    const file = uploadedDocs[key]
+    if (!(file instanceof File)) {
       return NextResponse.json(
         { success: false, message: `Missing required document: ${key}` },
+        { status: 400 }
+      )
+    }
+    const fileName = file.name.toLowerCase()
+    if (!ALLOWED_DOC_EXTENSIONS.some((ext) => fileName.endsWith(ext))) {
+      return NextResponse.json(
+        { success: false, message: `Invalid file type for ${key}` },
+        { status: 400 }
+      )
+    }
+    if (file.size > MAX_DOC_SIZE_BYTES) {
+      return NextResponse.json(
+        { success: false, message: `File too large for ${key}. Max 8MB.` },
         { status: 400 }
       )
     }
