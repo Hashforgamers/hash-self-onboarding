@@ -294,7 +294,14 @@ export default function Page() {
     <main className="shell">
       <header className="header">
         <div className="logo-row">
-          <Image src="/hash-logo.png" alt="Hash" className="logo" width={52} height={52} priority />
+          <Image
+            src="/hash-logo.png"
+            alt="Hash For Gamers Logo"
+            className="hash-logo hash-logo-lg"
+            width={56}
+            height={56}
+            priority
+          />
           <div>
             <h1 className="title">Hash Cafe Self Onboarding</h1>
             <p className="subtitle">Complete details, verify email, submit documents, and finish onboarding.</p>
@@ -315,6 +322,21 @@ export default function Page() {
         </aside>
 
         <article className="card form-card">
+          <div className="onboard-logo-banner">
+            <Image
+              src="/hash-logo.png"
+              alt="Hash For Gamers Logo"
+              width={40}
+              height={40}
+              className="hash-logo"
+              priority
+            />
+            <div>
+              <strong>Hash For Gamers</strong>
+              <small>Self Onboarding</small>
+            </div>
+          </div>
+
           {error && <div className="banner error">{error}</div>}
           {otpMessage && step === 0 && <div className="banner ok">{otpMessage}</div>}
 
