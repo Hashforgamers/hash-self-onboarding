@@ -297,9 +297,9 @@ export default function Page() {
           <Image
             src="/hash-logo.png"
             alt="Hash For Gamers Logo"
-            className="hash-logo hash-logo-lg"
-            width={56}
-            height={56}
+            className="logo"
+            width={52}
+            height={52}
             priority
           />
           <div>
@@ -328,7 +328,7 @@ export default function Page() {
               alt="Hash For Gamers Logo"
               width={40}
               height={40}
-              className="hash-logo"
+              className="logo logo-sm"
               priority
             />
             <div>
