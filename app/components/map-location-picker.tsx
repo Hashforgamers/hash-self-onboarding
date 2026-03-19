@@ -29,12 +29,37 @@ function loadGoogleMapsScript(apiKey: string) {
   if (googleScriptPromise) return googleScriptPromise
 
   googleScriptPromise = new Promise<void>((resolve, reject) => {
+    const win = window as any
+    win.__hashGoogleAuthFailed = false
+    const previousAuthFailure = win.gm_authFailure
+    win.gm_authFailure = () => {
+      win.__hashGoogleAuthFailed = true
+      if (typeof previousAuthFailure === "function") {
+        previousAuthFailure()
+      }
+      reject(
+        new Error(
+          "Google Maps authorization failed. Check API key, billing, and allowed referrers (include onboard.hashforgamers.com/*)."
+        )
+      )
+    }
+
     const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&v=weekly`
     script.async = true
     script.defer = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error("Failed to load Google Maps script"))
+    script.onload = () => {
+      if (win.__hashGoogleAuthFailed) {
+        reject(
+          new Error(
+            "Google Maps rejected this API key. Ensure Maps JavaScript API + Places API are enabled and domain referrer is allowed."
+          )
+        )
+        return
+      }
+      resolve()
+    }
+    script.onerror = () => reject(new Error("Failed to load Google Maps script. Check network/CSP settings."))
     document.head.appendChild(script)
   })
 
@@ -117,6 +142,23 @@ export default function MapLocationPicker({
           streetViewControl: false
         })
 
+        // Wait for first tile load. If Google auth/billing/referrer is broken,
+        // maps often stay on a gray error canvas and never become interactive.
+        await new Promise<void>((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            reject(
+              new Error(
+                "Google map failed to initialize. Verify Google Cloud billing, Maps JS + Places APIs, and allowed referrers."
+              )
+            )
+          }, 7000)
+
+          google.maps.event.addListenerOnce(mapRef.current, "tilesloaded", () => {
+            window.clearTimeout(timeout)
+            resolve()
+          })
+        })
+
         geocoderRef.current = new google.maps.Geocoder()
 
         markerRef.current = new google.maps.Marker({
@@ -186,6 +228,8 @@ export default function MapLocationPicker({
         if (!mounted) return
         setStatus("error")
         setErrorMessage(error instanceof Error ? error.message : "Map failed to load")
+        mapRef.current = null
+        markerRef.current = null
       }
     }
 
