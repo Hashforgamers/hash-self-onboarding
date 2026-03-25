@@ -107,6 +107,9 @@ export default function MapLocationPicker({
   const mapRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
   const geocoderRef = useRef<any>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const autocompleteRef = useRef<any>(null)
+  const [searchText, setSearchText] = useState("")
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
 
@@ -201,6 +204,27 @@ export default function MapLocationPicker({
           reverseGeocode(event.latLng)
         })
 
+        if (searchInputRef.current) {
+          autocompleteRef.current = new google.maps.places.Autocomplete(searchInputRef.current, {
+            fields: ["formatted_address", "address_components", "geometry", "name", "place_id"],
+            types: ["establishment", "geocode"],
+            componentRestrictions: { country: "in" }
+          })
+
+          autocompleteRef.current.addListener("place_changed", () => {
+            const place = autocompleteRef.current?.getPlace?.()
+            if (!place?.geometry?.location || !mapRef.current || !markerRef.current) return
+
+            mapRef.current.setCenter(place.geometry.location)
+            mapRef.current.setZoom(16)
+            markerRef.current.setPosition(place.geometry.location)
+
+            const payload = extractLocationPayload(place)
+            setSearchText(place?.name || place?.formatted_address || "")
+            onChange(payload)
+          })
+        }
+
         setStatus("ready")
       } catch (error) {
         if (!mounted) return
@@ -220,6 +244,15 @@ export default function MapLocationPicker({
 
   return (
     <div className="map-card">
+      <div className="map-toolbar">
+        <input
+          ref={searchInputRef}
+          value={searchText}
+          onChange={(event) => setSearchText(event.target.value)}
+          className="input"
+          placeholder="Search cafe on map (Google Places)"
+        />
+      </div>
       <div ref={mapElRef} className="map-canvas" />
       {status === "loading" && <p className="helper">Loading map...</p>}
       {status === "ready" && (
