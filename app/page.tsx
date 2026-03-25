@@ -268,6 +268,12 @@ export default function Page() {
   const handleMapLocationChange = useCallback((location: LocationPayload) => {
     setDraft((prev) => ({
       ...prev,
+      cafeName: (location.name || "").trim() || prev.cafeName,
+      addressLine1: (location.address || "").trim() || prev.addressLine1,
+      city: (location.city || "").trim() || prev.city,
+      state: (location.state || "").trim() || prev.state,
+      pincode: (location.pincode || "").replace(/\D/g, "").slice(0, 6) || prev.pincode,
+      country: (location.country || "").trim() || prev.country || "India",
       googlePlaceId: location.placeId || prev.googlePlaceId,
       latitude: String(location.lat),
       longitude: String(location.lng)
