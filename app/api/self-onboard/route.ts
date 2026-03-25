@@ -45,13 +45,20 @@ function parseHourMinute(value: string) {
 }
 
 function validatePayload(payload: SelfOnboardPayload) {
-  if ((payload.owner_name || "").trim().length < 2) return "Owner name is required."
+  const ownerName = (payload.owner_name || "").trim()
+  if (ownerName.length < 2) return "Owner name is required."
+  if (!/^[A-Za-z][A-Za-z\s.'-]{1,79}$/.test(ownerName)) return "Owner name format is invalid."
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((payload.owner_email || "").trim())) return "Valid email is required."
   if (!/^[6-9][0-9]{9}$/.test((payload.owner_phone || "").trim())) return "Phone number must be 10 digits."
   if (!(payload.email_verification_token || "").trim()) return "Email verification token is required."
   if ((payload.cafe_name || "").trim().length < 3) return "Cafe name is required."
+  if ((payload.cafe_name || "").trim().length > 120) return "Cafe name is too long."
   if (!(payload.address_line_1 || "").trim()) return "Address is required."
+  if ((payload.address_line_1 || "").trim().length < 5) return "Address should be at least 5 characters."
   if (!(payload.city || "").trim() || !(payload.state || "").trim()) return "City and state are required."
+  if ((payload.city || "").trim().length < 2 || (payload.state || "").trim().length < 2) {
+    return "City/state must be at least 2 characters."
+  }
   if (!/^[0-9]{6}$/.test((payload.pincode || "").trim())) return "Pincode must be 6 digits."
 
   const lat = Number(payload.latitude)
@@ -83,6 +90,7 @@ function validatePayload(payload: SelfOnboardPayload) {
   if ((payload.business_registration_number || "").trim().length < 3) {
     return "Business registration number is required."
   }
+  if ((payload.notes || "").trim().length > 1000) return "Notes can be up to 1000 characters."
   return null
 }
 

@@ -33,6 +33,10 @@ function validPhone(phone: string) {
   return /^[6-9][0-9]{9}$/.test(normalized)
 }
 
+function validOwnerName(name: string) {
+  return /^[A-Za-z][A-Za-z\s.'-]{1,79}$/.test(name)
+}
+
 function parseHourMinute(value: string) {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value)
   if (!match) return null
@@ -88,6 +92,9 @@ export function validateStep(
 ): string | null {
   if (step === 0) {
     if (draft.ownerName.trim().length < 2) return "Owner name must be at least 2 characters."
+    if (!validOwnerName(draft.ownerName.trim())) {
+      return "Owner name should contain only letters, spaces, dot, apostrophe, or hyphen."
+    }
     if (!validEmail(draft.ownerEmail.trim())) return "Valid owner email is required."
     if (!validPhone(draft.ownerPhone.trim())) return "Phone number must be 10 digits (starting from 6-9)."
     if (!draft.emailVerified) return "Please verify owner email with OTP before continuing."
@@ -96,7 +103,11 @@ export function validateStep(
   if (step === 1) {
     if (draft.cafeName.trim().length < 3) return "Cafe name must be at least 3 characters."
     if (!draft.addressLine1.trim()) return "Address is required."
+    if (draft.addressLine1.trim().length < 5) return "Address must be at least 5 characters."
     if (!draft.city.trim() || !draft.state.trim()) return "City and state are required."
+    if (draft.city.trim().length < 2 || draft.state.trim().length < 2) {
+      return "City/state must be at least 2 characters."
+    }
     if (!/^[0-9]{6}$/.test(draft.pincode.trim())) return "Pincode must be 6 digits."
     if (!draft.latitude.trim() || !draft.longitude.trim()) {
       return "Latitude and longitude are required. Use Google search or enter manually."
@@ -149,6 +160,7 @@ export function validateStep(
     if (draft.businessRegistrationNumber.trim().length < 3) {
       return "Business registration number is required."
     }
+    if (draft.notes.trim().length > 1000) return "Notes can be up to 1000 characters."
 
     const missingDocs = DOCUMENT_KEYS.filter((key) => !documents[key])
     if (missingDocs.length > 0) {

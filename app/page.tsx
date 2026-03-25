@@ -151,6 +151,14 @@ export default function Page() {
 
   async function sendOtp() {
     setError(null)
+    if (draft.ownerName.trim().length < 2) {
+      setError("Enter owner name before requesting OTP.")
+      return
+    }
+    if (!/^[6-9][0-9]{9}$/.test(normalizePhone(draft.ownerPhone))) {
+      setError("Enter a valid 10-digit owner phone number before requesting OTP.")
+      return
+    }
     if (!draft.ownerEmail.trim()) {
       setError("Enter owner email to receive OTP.")
       return
@@ -162,7 +170,11 @@ export default function Page() {
       const response = await fetch("/api/self-onboard/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: draft.ownerEmail, cafe_name: draft.cafeName })
+        body: JSON.stringify({
+          email: draft.ownerEmail,
+          cafe_name: draft.cafeName,
+          owner_phone: draft.ownerPhone
+        })
       })
       const data = (await response.json()) as { success?: boolean; message?: string }
       if (!response.ok) {

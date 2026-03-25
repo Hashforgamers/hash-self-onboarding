@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getOnboardBackendBaseUrl } from "@/lib/backend"
 
 export async function POST(request: NextRequest) {
-  let payload: { email?: string; cafe_name?: string }
+  let payload: { email?: string; cafe_name?: string; owner_phone?: string }
   try {
     payload = (await request.json()) as { email?: string; cafe_name?: string }
   } catch {
@@ -18,7 +18,11 @@ export async function POST(request: NextRequest) {
     const response = await fetch(`${getOnboardBackendBaseUrl()}/api/self-onboard/send-email-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, cafe_name: payload.cafe_name || "" })
+      body: JSON.stringify({
+        email,
+        cafe_name: payload.cafe_name || "",
+        owner_phone: payload.owner_phone || ""
+      })
     })
 
     const data = (await response.json().catch(() => ({}))) as { success?: boolean; message?: string }
