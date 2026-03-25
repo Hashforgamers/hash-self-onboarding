@@ -39,6 +39,29 @@ const DOCUMENT_LABELS: Record<DocumentKey, string> = {
   bank_acc_details: "Bank Account Proof"
 }
 
+const BUSINESS_REGISTRATION_OPTIONS = [
+  "GST Certificate",
+  "Udyam / MSME Registration",
+  "Shop & Establishment License",
+  "Trade License",
+  "Company Incorporation / LLP Certificate",
+  "Partnership Deed",
+  "Other"
+]
+
+const OWNER_PROOF_OPTIONS = ["Aadhaar", "PAN", "Voter ID", "Passport", "Driving License", "Other"]
+
+const DOCUMENT_HINTS: Record<DocumentKey, string> = {
+  business_registration:
+    "Upload registration document matching the selected type. Ensure number is clearly visible on first page.",
+  owner_identification_proof:
+    "Upload owner KYC proof (Aadhaar/PAN/Voter/Passport). Front side must be clear and readable.",
+  tax_identification_number:
+    "Upload GST certificate or tax registration page. If not available, upload a declaration letter.",
+  bank_acc_details:
+    "Upload only first page/cancelled cheque with account holder name, account number, IFSC, and bank name."
+}
+
 const initialDraft: OnboardingDraft = {
   ownerName: "",
   ownerEmail: "",
@@ -56,7 +79,10 @@ const initialDraft: OnboardingDraft = {
   latitude: "",
   longitude: "",
   website: "",
+  businessRegistrationType: "GST Certificate",
   businessRegistrationNumber: "",
+  ownerProofType: "Aadhaar",
+  ownerProofNumber: "",
   taxId: "",
   inventory: {
     pc: { count: 0, ratePerSlot: 0 },
@@ -95,6 +121,7 @@ export default function Page() {
   const [draft, setDraft] = useState<OnboardingDraft>(initialDraft)
   const [documents, setDocuments] = useState<Record<DocumentKey, File | null>>(initialDocuments)
   const [error, setError] = useState<string | null>(null)
+  const [existingDashboardUrl, setExistingDashboardUrl] = useState<string>("")
   const [otpState, setOtpState] = useState<"idle" | "sending" | "sent" | "verifying" | "verified">("idle")
   const [otpMessage, setOtpMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -151,6 +178,7 @@ export default function Page() {
 
   async function sendOtp() {
     setError(null)
+    setExistingDashboardUrl("")
     if (draft.ownerName.trim().length < 2) {
       setError("Enter owner name before requesting OTP.")
       return
@@ -176,9 +204,14 @@ export default function Page() {
           owner_phone: draft.ownerPhone
         })
       })
-      const data = (await response.json()) as { success?: boolean; message?: string }
+      const data = (await response.json()) as {
+        success?: boolean
+        message?: string
+        dashboard_url?: string
+      }
       if (!response.ok) {
         setError(data.message || "Unable to send OTP.")
+        setExistingDashboardUrl(data.dashboard_url || "")
         setOtpState("idle")
         return
       }
@@ -192,6 +225,7 @@ export default function Page() {
 
   async function verifyOtp() {
     setError(null)
+    setExistingDashboardUrl("")
     if (!draft.otpCode.trim()) {
       setError("Enter OTP to verify email.")
       return
@@ -208,10 +242,12 @@ export default function Page() {
         success?: boolean
         message?: string
         verification_token?: string
+        dashboard_url?: string
       }
 
       if (!response.ok || !data.verification_token) {
         setError(data.message || "OTP verification failed.")
+        setExistingDashboardUrl(data.dashboard_url || "")
         setOtpState("sent")
         return
       }
@@ -267,6 +303,7 @@ export default function Page() {
     }
 
     setError(null)
+    setExistingDashboardUrl("")
     setSubmitting(true)
 
     try {
@@ -289,6 +326,7 @@ export default function Page() {
       const data = (await response.json()) as SelfOnboardResponse
       if (!response.ok) {
         setError(data.message || "Onboarding failed.")
+        setExistingDashboardUrl(data.dashboard_url || "")
         setSubmitting(false)
         return
       }
@@ -349,7 +387,21 @@ export default function Page() {
             </div>
           </div>
 
-          {error && <div className="banner error">{error}</div>}
+          {error && (
+            <div className="banner error">
+              <div>{error}</div>
+              {existingDashboardUrl && (
+                <a
+                  className="banner-link"
+                  href={existingDashboardUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Cafe already exists? Open Dashboard
+                </a>
+              )}
+            </div>
+          )}
           {otpMessage && step === 0 && <div className="banner ok">{otpMessage}</div>}
 
           {step === 0 && (
@@ -503,6 +555,8 @@ export default function Page() {
                     apiKey={mapApiKey}
                     initialLat={draft.latitude ? Number(draft.latitude) : undefined}
                     initialLng={draft.longitude ? Number(draft.longitude) : undefined}
+                    autoSearchText={draft.cafeName}
+                    autoSearchContext={`${draft.city} ${draft.state}`.trim()}
                     onChange={handleMapLocationChange}
                   />
                 </div>
@@ -634,14 +688,61 @@ export default function Page() {
             <>
               <div className="row two">
                 <label>
+                  <span className="label">Business Registration Document Type</span>
+                  <select
+                    className="select"
+                    value={draft.businessRegistrationType}
+                    onChange={(e) => updateField("businessRegistrationType", e.target.value)}
+                  >
+                    {BUSINESS_REGISTRATION_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="helper">
+                    Accepted: GST, Udyam/MSME, Shop & Establishment, Trade License, Incorporation, Partnership Deed.
+                  </span>
+                </label>
+                <label>
                   <span className="label">Business Registration Number</span>
                   <input
                     className="input"
                     value={draft.businessRegistrationNumber}
                     onChange={(e) => updateField("businessRegistrationNumber", e.target.value)}
-                    placeholder="Registration number"
+                    placeholder={`Enter ${draft.businessRegistrationType} number`}
                   />
                 </label>
+              </div>
+
+              <div className="row two">
+                <label>
+                  <span className="label">Owner Identity Proof Type</span>
+                  <select
+                    className="select"
+                    value={draft.ownerProofType}
+                    onChange={(e) => updateField("ownerProofType", e.target.value)}
+                  >
+                    {OWNER_PROOF_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="helper">Choose one: Aadhaar, PAN, Voter ID, Passport, etc.</span>
+                </label>
+                <label>
+                  <span className="label">Owner Identity Proof Number</span>
+                  <input
+                    className="input"
+                    value={draft.ownerProofNumber}
+                    onChange={(e) => updateField("ownerProofNumber", e.target.value)}
+                    placeholder={`Enter ${draft.ownerProofType} number`}
+                  />
+                </label>
+              </div>
+
+              <div className="row two">
                 <label>
                   <span className="label">GST / Tax ID (optional)</span>
                   <input
@@ -677,6 +778,7 @@ export default function Page() {
                 {DOCUMENT_KEYS.map((key) => (
                   <label key={key}>
                     <span className="label">{DOCUMENT_LABELS[key]}</span>
+                    <span className="helper">{DOCUMENT_HINTS[key]}</span>
                     <input
                       className="input"
                       type="file"

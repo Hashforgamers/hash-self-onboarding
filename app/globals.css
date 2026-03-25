@@ -348,6 +348,14 @@ body {
   color: #7a1a1a;
 }
 
+.banner-link {
+  display: inline-block;
+  margin-top: 8px;
+  color: #0f6c42;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .banner.ok {
   border-color: var(--ok-border);
   background: var(--ok-bg);

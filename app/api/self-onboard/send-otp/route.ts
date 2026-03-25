@@ -25,11 +25,18 @@ export async function POST(request: NextRequest) {
       })
     })
 
-    const data = (await response.json().catch(() => ({}))) as { success?: boolean; message?: string }
+    const data = (await response.json().catch(() => ({}))) as {
+      success?: boolean
+      message?: string
+      code?: string
+      dashboard_url?: string
+    }
     return NextResponse.json(
       {
         success: Boolean(data.success),
-        message: data.message || (response.ok ? "OTP sent" : "Failed to send OTP")
+        message: data.message || (response.ok ? "OTP sent" : "Failed to send OTP"),
+        code: data.code,
+        dashboard_url: data.dashboard_url
       },
       { status: response.status }
     )

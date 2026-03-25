@@ -87,9 +87,14 @@ function validatePayload(payload: SelfOnboardPayload) {
     if (start === end) return "Open and close time cannot be same unless 24h is enabled."
   }
 
+  if (!(payload.business_registration_type || "").trim()) {
+    return "Business registration document type is required."
+  }
   if ((payload.business_registration_number || "").trim().length < 3) {
     return "Business registration number is required."
   }
+  if (!(payload.owner_proof_type || "").trim()) return "Owner proof type is required."
+  if ((payload.owner_proof_number || "").trim().length < 4) return "Owner proof number is required."
   if ((payload.notes || "").trim().length > 1000) return "Notes can be up to 1000 characters."
   return null
 }
@@ -175,12 +180,17 @@ export async function POST(request: NextRequest) {
     })
   )
 
+  const complianceSummary = [
+    `Business registration type: ${payload.business_registration_type}`,
+    `Owner proof: ${payload.owner_proof_type} (${payload.owner_proof_number})`
+  ].join("\n")
+
   const backendPayload = {
     onboarding_source: "self_onboard",
     self_onboard_email_verification_token: payload.email_verification_token,
     cafe_name: payload.cafe_name,
     owner_name: payload.owner_name,
-    description: payload.notes || "",
+    description: [payload.notes || "", complianceSummary].filter(Boolean).join("\n\n"),
     vendor_account_email: payload.owner_email,
     contact_info: {
       email: payload.owner_email,
@@ -198,8 +208,13 @@ export async function POST(request: NextRequest) {
     },
     business_registration_details: {
       registration_number: payload.business_registration_number,
+      registration_type: payload.business_registration_type,
       business_type: "Gaming Cafe",
       tax_id: payload.tax_id || ""
+    },
+    owner_proof_details: {
+      type: payload.owner_proof_type,
+      number: payload.owner_proof_number
     },
     timing,
     opening_day: new Date().toISOString().split("T")[0],
@@ -236,13 +251,17 @@ export async function POST(request: NextRequest) {
       vendor_id?: number
       documents_uploaded?: number
       error?: string
+      code?: string
+      dashboard_url?: string
     }
 
     if (!response.ok) {
       return NextResponse.json(
         {
           success: false,
-          message: data.message || data.error || "Onboarding failed"
+          message: data.message || data.error || "Onboarding failed",
+          code: data.code,
+          dashboard_url: data.dashboard_url
         },
         { status: response.status }
       )

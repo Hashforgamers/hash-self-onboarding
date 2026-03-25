@@ -76,7 +76,10 @@ export function toPayload(draft: OnboardingDraft): SelfOnboardPayload {
     latitude: draft.latitude ? Number(draft.latitude) : undefined,
     longitude: draft.longitude ? Number(draft.longitude) : undefined,
     website: draft.website.trim() || undefined,
+    business_registration_type: draft.businessRegistrationType.trim(),
     business_registration_number: draft.businessRegistrationNumber.trim(),
+    owner_proof_type: draft.ownerProofType.trim(),
+    owner_proof_number: draft.ownerProofNumber.trim(),
     tax_id: draft.taxId.trim() || undefined,
     inventory_summary: inventorySummary,
     schedule: draft.schedule,
@@ -157,8 +160,17 @@ export function validateStep(
   }
 
   if (step === 3) {
+    if (!draft.businessRegistrationType.trim()) {
+      return "Please select business registration document type."
+    }
     if (draft.businessRegistrationNumber.trim().length < 3) {
       return "Business registration number is required."
+    }
+    if (!draft.ownerProofType.trim()) {
+      return "Please select owner identity proof type."
+    }
+    if (draft.ownerProofNumber.trim().length < 4) {
+      return "Owner proof number must be at least 4 characters."
     }
     if (draft.notes.trim().length > 1000) return "Notes can be up to 1000 characters."
 

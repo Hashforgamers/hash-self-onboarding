@@ -51,7 +51,10 @@ export type OnboardingDraft = {
   latitude: string
   longitude: string
   website: string
+  businessRegistrationType: string
   businessRegistrationNumber: string
+  ownerProofType: string
+  ownerProofNumber: string
   taxId: string
   inventory: Record<ConsoleType, { count: number; ratePerSlot: number }>
   schedule: Record<DayKey, DaySchedule>
@@ -74,7 +77,10 @@ export type SelfOnboardPayload = {
   latitude?: number
   longitude?: number
   website?: string
+  business_registration_type: string
   business_registration_number: string
+  owner_proof_type: string
+  owner_proof_number: string
   tax_id?: string
   inventory_summary: Record<ConsoleType, { count: number; rate_per_slot: number }>
   schedule: Record<DayKey, DaySchedule>
@@ -87,4 +93,6 @@ export type SelfOnboardResponse = {
   message: string
   vendor_id?: number
   documents_uploaded?: number
+  code?: string
+  dashboard_url?: string
 }
