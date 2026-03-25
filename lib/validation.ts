@@ -113,7 +113,7 @@ export function validateStep(
     }
     if (!/^[0-9]{6}$/.test(draft.pincode.trim())) return "Pincode must be 6 digits."
     if (!draft.latitude.trim() || !draft.longitude.trim()) {
-      return "Latitude and longitude are required. Use Google search or enter manually."
+      return "Latitude and longitude are required. Use map picker or enter manually."
     }
     if (!validLatLng(draft.latitude.trim(), draft.longitude.trim())) {
       return "Latitude/longitude is invalid."

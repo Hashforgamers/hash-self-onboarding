@@ -18,8 +18,6 @@ type MapLocationPickerProps = {
   apiKey?: string
   initialLat?: number
   initialLng?: number
-  autoSearchText?: string
-  autoSearchContext?: string
   onChange: (payload: LocationPayload) => void
 }
 
@@ -101,20 +99,14 @@ export default function MapLocationPicker({
   apiKey,
   initialLat,
   initialLng,
-  autoSearchText,
-  autoSearchContext,
   onChange
 }: MapLocationPickerProps) {
   const initialLatRef = useRef(initialLat)
   const initialLngRef = useRef(initialLng)
   const mapElRef = useRef<HTMLDivElement | null>(null)
-  const inputElRef = useRef<HTMLInputElement | null>(null)
   const mapRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
   const geocoderRef = useRef<any>(null)
-  const placesServiceRef = useRef<any>(null)
-  const autoSearchTimerRef = useRef<number | null>(null)
-  const lastAutoQueryRef = useRef("")
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
 
@@ -126,34 +118,6 @@ export default function MapLocationPicker({
     }
 
     let mounted = true
-
-    const applyPlace = (place: any) => {
-      if (!place?.geometry?.location || !mapRef.current || !markerRef.current) return
-
-      mapRef.current.setCenter(place.geometry.location)
-      mapRef.current.setZoom(17)
-      markerRef.current.setPosition(place.geometry.location)
-
-      if (!geocoderRef.current || !place.place_id) {
-        const payload = extractLocationPayload(place)
-        onChange(payload)
-        return
-      }
-
-      geocoderRef.current.geocode({ placeId: place.place_id }, (results: any, geoStatus: string) => {
-        if (geoStatus === "OK" && results?.length) {
-          const enriched = {
-            ...results[0],
-            place_id: place.place_id,
-            name: place.name || results[0]?.name,
-            geometry: { location: place.geometry.location }
-          }
-          onChange(extractLocationPayload(enriched))
-          return
-        }
-        onChange(extractLocationPayload(place))
-      })
-    }
 
     const initMap = async () => {
       try {
@@ -195,8 +159,6 @@ export default function MapLocationPicker({
         })
 
         geocoderRef.current = new google.maps.Geocoder()
-        placesServiceRef.current = new google.maps.places.PlacesService(mapRef.current)
-
         markerRef.current = new google.maps.Marker({
           map: mapRef.current,
           position: center,
@@ -239,18 +201,6 @@ export default function MapLocationPicker({
           reverseGeocode(event.latLng)
         })
 
-        if (inputElRef.current) {
-          const autocomplete = new google.maps.places.Autocomplete(inputElRef.current, {
-            fields: ["place_id", "name", "formatted_address", "address_components", "geometry"],
-            types: ["establishment"],
-            componentRestrictions: { country: "in" }
-          })
-          autocomplete.addListener("place_changed", () => {
-            const place = autocomplete.getPlace()
-            applyPlace(place)
-          })
-        }
-
         setStatus("ready")
       } catch (error) {
         if (!mounted) return
@@ -265,98 +215,15 @@ export default function MapLocationPicker({
 
     return () => {
       mounted = false
-      if (autoSearchTimerRef.current) {
-        window.clearTimeout(autoSearchTimerRef.current)
-        autoSearchTimerRef.current = null
-      }
     }
   }, [apiKey, onChange])
 
-  useEffect(() => {
-    if (status !== "ready") return
-
-    const raw = String(autoSearchText || "").trim()
-    if (inputElRef.current && inputElRef.current.value !== raw) {
-      inputElRef.current.value = raw
-      inputElRef.current.dispatchEvent(new Event("input", { bubbles: true }))
-    }
-
-    if (raw.length < 3 || !placesServiceRef.current) return
-
-    const contextualQuery = [raw, String(autoSearchContext || "").trim(), "gaming cafe India"]
-      .filter(Boolean)
-      .join(" ")
-      .trim()
-      .replace(/\s+/g, " ")
-
-    if (!contextualQuery || contextualQuery === lastAutoQueryRef.current) return
-
-    if (autoSearchTimerRef.current) {
-      window.clearTimeout(autoSearchTimerRef.current)
-    }
-
-    autoSearchTimerRef.current = window.setTimeout(() => {
-      if (!placesServiceRef.current) return
-      placesServiceRef.current.findPlaceFromQuery(
-        {
-          query: contextualQuery,
-          fields: ["place_id", "name", "formatted_address", "geometry"]
-        },
-        (results: any[], findStatus: string) => {
-          if (findStatus !== "OK" || !results?.length) return
-          const first = results[0]
-          if (!first?.geometry?.location) return
-          lastAutoQueryRef.current = contextualQuery
-
-          if (!mapRef.current || !markerRef.current) return
-          mapRef.current.setCenter(first.geometry.location)
-          mapRef.current.setZoom(17)
-          markerRef.current.setPosition(first.geometry.location)
-
-          if (!geocoderRef.current || !first.place_id) {
-            onChange(extractLocationPayload(first))
-            return
-          }
-
-          geocoderRef.current.geocode({ placeId: first.place_id }, (geoResults: any, geoStatus: string) => {
-            if (geoStatus === "OK" && geoResults?.length) {
-              const enriched = {
-                ...geoResults[0],
-                place_id: first.place_id,
-                name: first.name || geoResults[0]?.name,
-                geometry: { location: first.geometry.location }
-              }
-              onChange(extractLocationPayload(enriched))
-              return
-            }
-            onChange(extractLocationPayload(first))
-          })
-        }
-      )
-    }, 650)
-
-    return () => {
-      if (autoSearchTimerRef.current) {
-        window.clearTimeout(autoSearchTimerRef.current)
-        autoSearchTimerRef.current = null
-      }
-    }
-  }, [autoSearchText, autoSearchContext, status, onChange])
-
   return (
     <div className="map-card">
-      <div className="map-toolbar">
-        <input
-          ref={inputElRef}
-          className="input"
-          placeholder="Search cafe on map (Google Places)"
-          type="text"
-        />
-      </div>
       <div ref={mapElRef} className="map-canvas" />
       {status === "loading" && <p className="helper">Loading map...</p>}
       {status === "ready" && (
-        <p className="helper">Tip: Search a place, click map, or drag marker to set exact location.</p>
+        <p className="helper">Tip: Click map or drag marker to set exact location.</p>
       )}
       {status === "error" && <p className="map-error">{errorMessage}</p>}
     </div>

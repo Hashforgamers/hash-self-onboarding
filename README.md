@@ -6,7 +6,7 @@ Pre-login self-onboarding flow for new gaming cafes.
 
 1. Owner enters email and gets OTP.
 2. Owner verifies OTP (email validation first).
-3. Cafe identity can be fetched from Google search (name/address + lat/lng).
+3. Cafe identity is entered manually, with map click/drag to set lat/lng.
 4. Inventory setup includes PC/Xbox/PS5/VR + operating hours.
 5. Amenities are selected and all required documents are uploaded.
 6. Submit to onboard backend (`/api/onboard`).
@@ -29,7 +29,7 @@ Copy `.env.example` to `.env.local` and set:
 - `SELF_ONBOARD_BACKEND_URL` (e.g. `https://hfg-onboard.onrender.com`)
 - `SELF_ONBOARD_SERVICE_KEY` (optional)
 - `USER_ONBOARD_BACKEND_URL` (e.g. `https://hfg-user-onboard.onrender.com`)
-- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (required for right-side map + drag/search picker)
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (required for right-side map picker)
 - `GOOGLE_MAPS_API_KEY` (optional, only for `/api/google/*` fallback routes)
 
 ## Frontend API Routes (in this project)

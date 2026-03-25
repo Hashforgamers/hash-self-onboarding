@@ -269,12 +269,6 @@ export default function Page() {
     setDraft((prev) => ({
       ...prev,
       googlePlaceId: location.placeId || prev.googlePlaceId,
-      cafeName: location.name || prev.cafeName,
-      addressLine1: location.address || prev.addressLine1,
-      city: location.city || prev.city,
-      state: location.state || prev.state,
-      pincode: location.pincode || prev.pincode,
-      country: location.country || prev.country,
       latitude: String(location.lat),
       longitude: String(location.lng)
     }))
@@ -555,8 +549,6 @@ export default function Page() {
                     apiKey={mapApiKey}
                     initialLat={draft.latitude ? Number(draft.latitude) : undefined}
                     initialLng={draft.longitude ? Number(draft.longitude) : undefined}
-                    autoSearchText={draft.cafeName}
-                    autoSearchContext={`${draft.city} ${draft.state}`.trim()}
                     onChange={handleMapLocationChange}
                   />
                 </div>
