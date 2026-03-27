@@ -70,17 +70,30 @@ function pickComponent(components: any[] = [], type: string) {
   return components.find((component) => component.types?.includes(type))?.long_name || ""
 }
 
+function pickFirstComponent(components: any[] = [], types: string[]) {
+  for (const type of types) {
+    const value = pickComponent(components, type)
+    if (value) return value
+  }
+  return ""
+}
+
 function extractLocationPayload(result: any): LocationPayload {
   const components = result?.address_components || []
   const streetNumber = pickComponent(components, "street_number")
   const route = pickComponent(components, "route")
-  const neighborhood = pickComponent(components, "sublocality") || pickComponent(components, "neighborhood")
-  const address = [streetNumber, route, neighborhood].filter(Boolean).join(" ") || result?.formatted_address || ""
+  const neighborhood =
+    pickFirstComponent(components, ["sublocality_level_1", "sublocality", "neighborhood"]) || ""
+  const composedAddress = [streetNumber, route, neighborhood].filter(Boolean).join(" ").trim()
+  const address = composedAddress || result?.formatted_address || result?.name || ""
 
-  const city =
-    pickComponent(components, "locality") ||
-    pickComponent(components, "administrative_area_level_2") ||
-    pickComponent(components, "sublocality")
+  const city = pickFirstComponent(components, [
+    "locality",
+    "sublocality_level_1",
+    "sublocality",
+    "administrative_area_level_3",
+    "administrative_area_level_2"
+  ])
 
   return {
     lat: Number(result?.geometry?.location?.lat?.() ?? result?.geometry?.location?.lat ?? 0),
@@ -185,8 +198,10 @@ export default function MapLocationPicker({
               return
             }
 
+            const bestResult =
+              results.find((entry: any) => pickComponent(entry?.address_components || [], "postal_code")) || results[0]
             const payload = extractLocationPayload({
-              ...results[0],
+              ...bestResult,
               geometry: { location: position }
             })
             onChange(payload)
@@ -219,9 +234,33 @@ export default function MapLocationPicker({
             mapRef.current.setZoom(16)
             markerRef.current.setPosition(place.geometry.location)
 
-            const payload = extractLocationPayload(place)
-            setSearchText(place?.name || place?.formatted_address || "")
-            onChange(payload)
+            const updateWithPayload = (payload: LocationPayload) => {
+              setSearchText(place?.name || place?.formatted_address || payload.address || "")
+              onChange(payload)
+            }
+
+            if (place?.place_id && geocoderRef.current) {
+              geocoderRef.current.geocode({ placeId: place.place_id }, (results: any, geoStatus: string) => {
+                if (geoStatus === "OK" && results?.length) {
+                  const bestResult =
+                    results.find((entry: any) => pickComponent(entry?.address_components || [], "postal_code")) ||
+                    results[0]
+                  updateWithPayload(
+                    extractLocationPayload({
+                      ...bestResult,
+                      geometry: { location: place.geometry.location },
+                      place_id: place.place_id,
+                      name: place?.name
+                    })
+                  )
+                  return
+                }
+                updateWithPayload(extractLocationPayload(place))
+              })
+              return
+            }
+
+            updateWithPayload(extractLocationPayload(place))
           })
         }
 
