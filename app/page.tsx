@@ -87,14 +87,27 @@ const initialDraft: OnboardingDraft = {
   inventory: Object.fromEntries(
     DEFAULT_CONSOLE_TYPES.map((slug) => [slug, { count: 0, ratePerSlot: 0 }])
   ) as OnboardingDraft["inventory"],
+  inventoryConfig: Object.fromEntries(
+    DEFAULT_CONSOLE_TYPES.map((slug) => [
+      slug,
+      {
+        capacity: 1,
+        supportsMultiplayer: slug === "pc" || slug === "playstation" || slug === "xbox",
+        inputMode: slug === "pc" ? "keyboard_mouse" : slug === "vr_headset" ? "motion" : "controller",
+        controllerPolicy: slug === "pc" || slug === "vr_headset" ? "none" : "optional",
+        baseRatePerSlot: 0,
+        playAreaSqft: slug === "vr_headset" ? 64 : 0
+      }
+    ])
+  ) as OnboardingDraft["inventoryConfig"],
   schedule: {
-    mon: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
-    tue: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
-    wed: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
-    thu: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
-    fri: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
-    sat: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
-    sun: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 }
+    mon: { isOpen: true, is24Hours: true, open: "00:00", close: "00:00", slotDuration: 30 },
+    tue: { isOpen: true, is24Hours: true, open: "00:00", close: "00:00", slotDuration: 30 },
+    wed: { isOpen: true, is24Hours: true, open: "00:00", close: "00:00", slotDuration: 30 },
+    thu: { isOpen: true, is24Hours: true, open: "00:00", close: "00:00", slotDuration: 30 },
+    fri: { isOpen: true, is24Hours: true, open: "00:00", close: "00:00", slotDuration: 30 },
+    sat: { isOpen: true, is24Hours: true, open: "00:00", close: "00:00", slotDuration: 30 },
+    sun: { isOpen: true, is24Hours: true, open: "00:00", close: "00:00", slotDuration: 30 }
   },
   amenities: Object.fromEntries(DEFAULT_AMENITIES.map((name) => [name, true])),
   notes: ""
@@ -128,7 +141,16 @@ export default function Page() {
 
   const displayConsoleTypes = useMemo(() => {
     if (consoleTypes.length > 0) return consoleTypes
-    return DEFAULT_CONSOLE_TYPES.map((slug) => ({ slug, display_name: slug.replace(/_/g, " ") }))
+    return DEFAULT_CONSOLE_TYPES.map((slug) => ({
+      slug,
+      display_name: slug.replace(/_/g, " "),
+      family: "other",
+      input_mode: slug === "pc" ? "keyboard_mouse" : slug === "vr_headset" ? "motion" : "controller",
+      supports_multiplayer: slug === "pc" || slug === "playstation" || slug === "xbox",
+      default_capacity: 1,
+      controller_policy: slug === "pc" || slug === "vr_headset" ? "none" : "optional",
+      is_active: true
+    }))
   }, [consoleTypes])
 
   const openConsoleTotal = useMemo(() => {
@@ -147,12 +169,23 @@ export default function Page() {
         setConsoleTypes(items)
         setDraft((prev) => {
           const nextInventory: OnboardingDraft["inventory"] = { ...prev.inventory }
+          const nextInventoryConfig: OnboardingDraft["inventoryConfig"] = { ...prev.inventoryConfig }
           for (const item of items) {
             if (!nextInventory[item.slug]) {
               nextInventory[item.slug] = { count: 0, ratePerSlot: 0 }
             }
+            if (!nextInventoryConfig[item.slug]) {
+              nextInventoryConfig[item.slug] = {
+                capacity: Math.max(1, Number(item.default_capacity || 1)),
+                supportsMultiplayer: Boolean(item.supports_multiplayer),
+                inputMode: String(item.input_mode || "controller"),
+                controllerPolicy: String(item.controller_policy || "none"),
+                baseRatePerSlot: 0,
+                playAreaSqft: item.family === "vr" || item.slug.includes("vr") ? 64 : 0
+              }
+            }
           }
-          return { ...prev, inventory: nextInventory }
+          return { ...prev, inventory: nextInventory, inventoryConfig: nextInventoryConfig }
         })
       } catch {
         // Keep fallback console list if API fails.
@@ -204,6 +237,33 @@ export default function Page() {
 
   function setDocument(key: DocumentKey, file: File | null) {
     setDocuments((prev) => ({ ...prev, [key]: file }))
+  }
+
+  function updateInventoryConfig(
+    slug: string,
+    key: "capacity" | "supportsMultiplayer" | "inputMode" | "controllerPolicy" | "baseRatePerSlot" | "playAreaSqft",
+    value: string | number | boolean
+  ) {
+    setDraft((prev) => ({
+      ...prev,
+      inventoryConfig: {
+        ...prev.inventoryConfig,
+        [slug]: {
+          ...(prev.inventoryConfig[slug] || {
+            capacity: 1,
+            supportsMultiplayer: false,
+            inputMode: "controller",
+            controllerPolicy: "none",
+            baseRatePerSlot: 0,
+            playAreaSqft: 0
+          }),
+          [key]:
+            key === "capacity" || key === "baseRatePerSlot" || key === "playAreaSqft"
+              ? Math.max(0, Number(value || 0))
+              : value
+        }
+      }
+    }))
   }
 
   async function sendOtp() {
@@ -632,6 +692,111 @@ export default function Page() {
                 </table>
               </div>
               <p className="helper">Total selected consoles: {openConsoleTotal}</p>
+
+              <p className="section-title">Console-Specific Setup</p>
+              <div className="row">
+                {displayConsoleTypes
+                  .filter((type) => Number(draft.inventory[type.slug]?.count || 0) > 0)
+                  .map((type) => {
+                    const cfg = draft.inventoryConfig[type.slug] || {
+                      capacity: Math.max(1, Number(type.default_capacity || 1)),
+                      supportsMultiplayer: Boolean(type.supports_multiplayer),
+                      inputMode: String(type.input_mode || "controller"),
+                      controllerPolicy: String(type.controller_policy || "none"),
+                      playAreaSqft: type.family === "vr" || type.slug.includes("vr") ? 64 : 0
+                    }
+                    const needsPlayArea = type.family === "vr" || type.slug.includes("vr")
+                    return (
+                      <div key={`cfg-${type.slug}`} className="table-shell" style={{ marginBottom: 10 }}>
+                        <div style={{ padding: "10px 12px", fontWeight: 700 }}>
+                          {(type.display_name || type.slug).replace(/_/g, " ")}
+                        </div>
+                        <div className="row two" style={{ padding: "0 12px 12px" }}>
+                          <label>
+                            <span className="label">Capacity / Setup</span>
+                            <input
+                              className="input"
+                              type="number"
+                              min={1}
+                              max={64}
+                              value={cfg.capacity}
+                              onChange={(e) => updateInventoryConfig(type.slug, "capacity", e.target.value)}
+                            />
+                          </label>
+                          <label>
+                            <span className="label">Input Mode</span>
+                            <select
+                              className="select"
+                              value={cfg.inputMode}
+                              onChange={(e) => updateInventoryConfig(type.slug, "inputMode", e.target.value)}
+                            >
+                              <option value="controller">Controller</option>
+                              <option value="keyboard_mouse">Keyboard + Mouse</option>
+                              <option value="motion">Motion</option>
+                              <option value="touch">Touch</option>
+                              <option value="mixed">Mixed</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="row two" style={{ padding: "0 12px 12px" }}>
+                          <label>
+                            <span className="label">Controller Policy</span>
+                            <select
+                              className="select"
+                              value={cfg.controllerPolicy}
+                              onChange={(e) => updateInventoryConfig(type.slug, "controllerPolicy", e.target.value)}
+                            >
+                              <option value="none">Not Applicable</option>
+                              <option value="optional">Optional</option>
+                              <option value="required">Required</option>
+                              <option value="included">Included</option>
+                            </select>
+                          </label>
+                          <label className="check-item" style={{ alignSelf: "end", marginBottom: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cfg.supportsMultiplayer)}
+                              onChange={(e) =>
+                                updateInventoryConfig(type.slug, "supportsMultiplayer", e.target.checked)
+                              }
+                            />
+                            <span>Supports Multiplayer</span>
+                          </label>
+                        </div>
+                        <div className="row" style={{ padding: "0 12px 12px" }}>
+                          <label>
+                            <span className="label">Rate / Slot</span>
+                            <input
+                              className="input"
+                              type="number"
+                              min={0}
+                              value={draft.inventory[type.slug]?.ratePerSlot || 0}
+                              onChange={(e) => {
+                                updateInventory(type.slug, "ratePerSlot", e.target.value)
+                                updateInventoryConfig(type.slug, "baseRatePerSlot", e.target.value)
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {needsPlayArea && (
+                          <div className="row" style={{ padding: "0 12px 12px" }}>
+                            <label>
+                              <span className="label">Recommended Play Area (sq ft)</span>
+                              <input
+                                className="input"
+                                type="number"
+                                min={0}
+                                value={cfg.playAreaSqft || 0}
+                                onChange={(e) => updateInventoryConfig(type.slug, "playAreaSqft", e.target.value)}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+              </div>
 
               <p className="section-title">Operating Hours</p>
               <div className="table-shell">

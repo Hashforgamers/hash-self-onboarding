@@ -70,6 +70,19 @@ function validatePayload(payload: SelfOnboardPayload) {
     return sum + Number(details.count || 0)
   }, 0)
   if (totalCount <= 0) return "At least one console count is required."
+  const inventoryConfig = payload.inventory_config || {}
+  for (const [slug, cfg] of Object.entries(inventoryConfig)) {
+    const qty = Number(payload.inventory_summary?.[slug]?.count || 0)
+    if (qty <= 0) continue
+    const capacity = Number(cfg.capacity || 1)
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 64) {
+      return "Invalid console capacity in inventory configuration."
+    }
+    const rate = Number(cfg.base_rate_per_slot || payload.inventory_summary?.[slug]?.rate_per_slot || 0)
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100000) {
+      return "Invalid console pricing in inventory configuration."
+    }
+  }
 
   const hasOpenDay = DAY_KEYS.some((day) => payload.schedule?.[day]?.isOpen)
   if (!hasOpenDay) return "At least one operating day must be open."
@@ -180,9 +193,24 @@ export async function POST(request: NextRequest) {
     })
   )
 
+  const inventoryConfigSummary = Object.entries(payload.inventory_config || {})
+    .filter(([slug]) => Number(payload.inventory_summary?.[slug]?.count || 0) > 0)
+    .map(([slug, cfg]) => {
+      const safeSlug = String(slug || "console").replace(/_/g, " ")
+      const cap = Number(cfg.capacity || 1)
+      const mode = String(cfg.input_mode || "controller")
+      const policy = String(cfg.controller_policy || "none")
+      const multi = cfg.supports_multiplayer ? "yes" : "no"
+      const rate = Number(cfg.base_rate_per_slot || payload.inventory_summary?.[slug]?.rate_per_slot || 0)
+      const area = cfg.play_area_sqft ? `, play-area: ${cfg.play_area_sqft} sq ft` : ""
+      return `- ${safeSlug}: cap=${cap}, rate=₹${rate}, mode=${mode}, multiplayer=${multi}, controller=${policy}${area}`
+    })
+    .join("\n")
+
   const complianceSummary = [
     `Business registration type: ${payload.business_registration_type}`,
-    `Owner proof: ${payload.owner_proof_type} (${payload.owner_proof_number})`
+    `Owner proof: ${payload.owner_proof_type} (${payload.owner_proof_number})`,
+    inventoryConfigSummary ? `Console capability mapping:\n${inventoryConfigSummary}` : ""
   ].join("\n")
 
   const backendPayload = {

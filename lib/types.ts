@@ -56,6 +56,17 @@ export type OnboardingDraft = {
   ownerProofNumber: string
   taxId: string
   inventory: Record<string, { count: number; ratePerSlot: number }>
+  inventoryConfig: Record<
+    string,
+    {
+      capacity: number
+      supportsMultiplayer: boolean
+      inputMode: string
+      controllerPolicy: string
+      baseRatePerSlot?: number
+      playAreaSqft?: number
+    }
+  >
   schedule: Record<DayKey, DaySchedule>
   amenities: Record<string, boolean>
   notes: string
@@ -82,6 +93,17 @@ export type SelfOnboardPayload = {
   owner_proof_number: string
   tax_id?: string
   inventory_summary: Record<string, { count: number; rate_per_slot: number }>
+  inventory_config?: Record<
+    string,
+    {
+      capacity: number
+      supports_multiplayer: boolean
+      input_mode: string
+      controller_policy: string
+      base_rate_per_slot?: number
+      play_area_sqft?: number
+    }
+  >
   schedule: Record<DayKey, DaySchedule>
   amenities: Record<string, boolean>
   notes?: string
@@ -93,6 +115,7 @@ export type ConsoleCatalogType = {
   family?: string
   icon?: string
   input_mode?: string
+  controller_policy?: string
   supports_multiplayer?: boolean
   default_capacity?: number
   is_active?: boolean

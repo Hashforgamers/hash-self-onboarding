@@ -82,6 +82,19 @@ export function toPayload(draft: OnboardingDraft): SelfOnboardPayload {
     owner_proof_number: draft.ownerProofNumber.trim(),
     tax_id: draft.taxId.trim() || undefined,
     inventory_summary: inventorySummary,
+    inventory_config: Object.fromEntries(
+      Object.entries(draft.inventoryConfig || {}).map(([slug, cfg]) => [
+        slug,
+        {
+          capacity: Math.max(1, Number(cfg?.capacity || 1)),
+          supports_multiplayer: Boolean(cfg?.supportsMultiplayer),
+          input_mode: String(cfg?.inputMode || "controller"),
+          controller_policy: String(cfg?.controllerPolicy || "none"),
+          base_rate_per_slot: Math.max(0, Number(draft.inventory?.[slug]?.ratePerSlot || cfg?.baseRatePerSlot || 0)),
+          play_area_sqft: cfg?.playAreaSqft ? Math.max(0, Number(cfg.playAreaSqft)) : undefined
+        }
+      ])
+    ),
     schedule: draft.schedule,
     amenities: draft.amenities,
     notes: draft.notes.trim() || undefined
@@ -136,6 +149,27 @@ export function validateStep(
       if (count > 200) return "Console quantity per type cannot exceed 200."
       if (!Number.isFinite(rate) || rate < 0) return "Rate per slot must be non-negative."
       if (rate > 100000) return "Rate per slot is too high. Please verify."
+    }
+
+    for (const [slug, cfg] of Object.entries(draft.inventoryConfig || {})) {
+      const count = Number(draft.inventory?.[slug]?.count || 0)
+      if (count <= 0) continue
+      const cap = Number(cfg?.capacity || 1)
+      if (!Number.isInteger(cap) || cap < 1 || cap > 64) {
+        return "Capacity per setup should be between 1 and 64."
+      }
+      const playArea = Number(cfg?.playAreaSqft || 0)
+      if (!Number.isFinite(playArea) || playArea < 0 || playArea > 100000) {
+        return "Play area looks invalid."
+      }
+      if (!String(cfg?.inputMode || "").trim()) return "Input mode is required for selected console types."
+      if (!String(cfg?.controllerPolicy || "").trim()) {
+        return "Controller policy is required for selected console types."
+      }
+      const baseRate = Number(draft.inventory?.[slug]?.ratePerSlot || cfg?.baseRatePerSlot || 0)
+      if (!Number.isFinite(baseRate) || baseRate < 0 || baseRate > 100000) {
+        return "Rate per slot is invalid."
+      }
     }
 
     const hasOpenDay = DAY_KEYS.some((day) => draft.schedule[day].isOpen)
