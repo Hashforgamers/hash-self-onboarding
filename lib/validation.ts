@@ -1,7 +1,7 @@
 import type { DayKey, DocumentKey, OnboardingDraft, SelfOnboardPayload } from "@/lib/types"
 
 export const DAY_KEYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-export const CONSOLE_TYPES = ["pc", "xbox", "ps5", "vr"] as const
+export const DEFAULT_CONSOLE_TYPES = ["pc", "playstation", "xbox", "vr_headset"] as const
 export const DOCUMENT_KEYS: DocumentKey[] = [
   "business_registration",
   "owner_identification_proof",
@@ -52,11 +52,11 @@ function validLatLng(lat: string, lng: string) {
 
 export function toPayload(draft: OnboardingDraft): SelfOnboardPayload {
   const inventorySummary = Object.fromEntries(
-    CONSOLE_TYPES.map((type) => [
-      type,
+    Object.entries(draft.inventory || {}).map(([slug, details]) => [
+      slug,
       {
-        count: Math.max(0, Number(draft.inventory[type].count || 0)),
-        rate_per_slot: Math.max(0, Number(draft.inventory[type].ratePerSlot || 0))
+        count: Math.max(0, Number(details?.count || 0)),
+        rate_per_slot: Math.max(0, Number(details?.ratePerSlot || 0))
       }
     ])
   ) as SelfOnboardPayload["inventory_summary"]
@@ -124,13 +124,14 @@ export function validateStep(
   }
 
   if (step === 2) {
-    const totalConsoles = CONSOLE_TYPES.reduce((sum, type) => sum + Number(draft.inventory[type].count || 0), 0)
+    const inventoryEntries = Object.entries(draft.inventory || {})
+    const totalConsoles = inventoryEntries.reduce((sum, [, details]) => sum + Number(details?.count || 0), 0)
     if (totalConsoles <= 0) return "At least one console quantity is required."
     if (totalConsoles > 500) return "Total console quantity looks too high. Please verify."
 
-    for (const type of CONSOLE_TYPES) {
-      const count = Number(draft.inventory[type].count || 0)
-      const rate = Number(draft.inventory[type].ratePerSlot || 0)
+    for (const [, details] of inventoryEntries) {
+      const count = Number(details?.count || 0)
+      const rate = Number(details?.ratePerSlot || 0)
       if (!Number.isInteger(count) || count < 0) return "Console quantity must be a whole number."
       if (count > 200) return "Console quantity per type cannot exceed 200."
       if (!Number.isFinite(rate) || rate < 0) return "Rate per slot must be non-negative."

@@ -1,10 +1,10 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Image from "next/image"
-import type { DayKey, DocumentKey, OnboardingDraft, SelfOnboardResponse } from "@/lib/types"
+import type { ConsoleCatalogType, DayKey, DocumentKey, OnboardingDraft, SelfOnboardResponse } from "@/lib/types"
 import {
-  CONSOLE_TYPES,
+  DEFAULT_CONSOLE_TYPES,
   DAY_KEYS,
   DEFAULT_AMENITIES,
   DOCUMENT_KEYS,
@@ -84,12 +84,9 @@ const initialDraft: OnboardingDraft = {
   ownerProofType: "Aadhaar",
   ownerProofNumber: "",
   taxId: "",
-  inventory: {
-    pc: { count: 0, ratePerSlot: 0 },
-    xbox: { count: 0, ratePerSlot: 0 },
-    ps5: { count: 0, ratePerSlot: 0 },
-    vr: { count: 0, ratePerSlot: 0 }
-  },
+  inventory: Object.fromEntries(
+    DEFAULT_CONSOLE_TYPES.map((slug) => [slug, { count: 0, ratePerSlot: 0 }])
+  ) as OnboardingDraft["inventory"],
   schedule: {
     mon: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
     tue: { isOpen: true, is24Hours: false, open: "09:00", close: "23:00", slotDuration: 30 },
@@ -126,12 +123,45 @@ export default function Page() {
   const [otpMessage, setOtpMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<SelfOnboardResponse | null>(null)
+  const [consoleTypes, setConsoleTypes] = useState<ConsoleCatalogType[]>([])
   const mapApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-  const openConsoleTotal = useMemo(
-    () => CONSOLE_TYPES.reduce((sum, type) => sum + Number(draft.inventory[type].count || 0), 0),
-    [draft.inventory]
-  )
+  const displayConsoleTypes = useMemo(() => {
+    if (consoleTypes.length > 0) return consoleTypes
+    return DEFAULT_CONSOLE_TYPES.map((slug) => ({ slug, display_name: slug.replace(/_/g, " ") }))
+  }, [consoleTypes])
+
+  const openConsoleTotal = useMemo(() => {
+    return Object.values(draft.inventory || {}).reduce((sum, item) => sum + Number(item?.count || 0), 0)
+  }, [draft.inventory])
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const response = await fetch("/api/console-types", { cache: "no-store" })
+        if (!response.ok) return
+        const data = (await response.json()) as { console_types?: ConsoleCatalogType[] }
+        const items = (data.console_types || []).filter((item) => item?.slug && item.is_active !== false)
+        if (!mounted || items.length === 0) return
+        setConsoleTypes(items)
+        setDraft((prev) => {
+          const nextInventory: OnboardingDraft["inventory"] = { ...prev.inventory }
+          for (const item of items) {
+            if (!nextInventory[item.slug]) {
+              nextInventory[item.slug] = { count: 0, ratePerSlot: 0 }
+            }
+          }
+          return { ...prev, inventory: nextInventory }
+        })
+      } catch {
+        // Keep fallback console list if API fails.
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   function updateField<K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) {
     setDraft((prev) => {
@@ -158,7 +188,7 @@ export default function Page() {
     }))
   }
 
-  function updateInventory(type: (typeof CONSOLE_TYPES)[number], key: "count" | "ratePerSlot", value: string) {
+  function updateInventory(type: string, key: "count" | "ratePerSlot", value: string) {
     const parsed = Number(value)
     setDraft((prev) => ({
       ...prev,
@@ -575,16 +605,16 @@ export default function Page() {
                     </tr>
                   </thead>
                   <tbody>
-                    {CONSOLE_TYPES.map((type) => (
-                      <tr key={type}>
-                        <td>{type.toUpperCase()}</td>
+                    {displayConsoleTypes.map((type) => (
+                      <tr key={type.slug}>
+                        <td>{(type.display_name || type.slug).replace(/_/g, " ")}</td>
                         <td>
                           <input
                             className="input"
                             type="number"
                             min={0}
-                            value={draft.inventory[type].count}
-                            onChange={(e) => updateInventory(type, "count", e.target.value)}
+                            value={draft.inventory[type.slug]?.count || 0}
+                            onChange={(e) => updateInventory(type.slug, "count", e.target.value)}
                           />
                         </td>
                         <td>
@@ -592,8 +622,8 @@ export default function Page() {
                             className="input"
                             type="number"
                             min={0}
-                            value={draft.inventory[type].ratePerSlot}
-                            onChange={(e) => updateInventory(type, "ratePerSlot", e.target.value)}
+                            value={draft.inventory[type.slug]?.ratePerSlot || 0}
+                            onChange={(e) => updateInventory(type.slug, "ratePerSlot", e.target.value)}
                           />
                         </td>
                       </tr>

@@ -1,4 +1,3 @@
-export type ConsoleType = "pc" | "xbox" | "ps5" | "vr"
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun"
 
 export type DaySchedule = {
@@ -56,7 +55,7 @@ export type OnboardingDraft = {
   ownerProofType: string
   ownerProofNumber: string
   taxId: string
-  inventory: Record<ConsoleType, { count: number; ratePerSlot: number }>
+  inventory: Record<string, { count: number; ratePerSlot: number }>
   schedule: Record<DayKey, DaySchedule>
   amenities: Record<string, boolean>
   notes: string
@@ -82,10 +81,21 @@ export type SelfOnboardPayload = {
   owner_proof_type: string
   owner_proof_number: string
   tax_id?: string
-  inventory_summary: Record<ConsoleType, { count: number; rate_per_slot: number }>
+  inventory_summary: Record<string, { count: number; rate_per_slot: number }>
   schedule: Record<DayKey, DaySchedule>
   amenities: Record<string, boolean>
   notes?: string
+}
+
+export type ConsoleCatalogType = {
+  slug: string
+  display_name?: string
+  family?: string
+  icon?: string
+  input_mode?: string
+  supports_multiplayer?: boolean
+  default_capacity?: number
+  is_active?: boolean
 }
 
 export type SelfOnboardResponse = {
