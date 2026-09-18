@@ -122,6 +122,8 @@ export type ConsoleCatalogType = {
 }
 
 export type SelfOnboardResponse = {
+  status?: string
+  email_sent?: boolean
   success: boolean
   message: string
   vendor_id?: number

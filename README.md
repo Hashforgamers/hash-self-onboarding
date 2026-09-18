@@ -11,7 +11,7 @@ Pre-login self-onboarding flow for new gaming cafes.
 5. Amenities are selected and all required documents are uploaded.
 6. Submit to onboard backend (`/api/onboard`).
 
-On success, UI shows confirmation: check email for onboarding confirmation and upcoming credentials/dashboard link.
+On success, the cafe is automatically active. The backend sends the owner login email, generated password, cafe PIN, and dashboard link. After sign-in and cafe PIN entry, owners without a subscription can choose and purchase a plan. The success screen reports mail dispatch failure honestly and prevents resubmitting an already-created cafe.
 
 ## Quick Start
 

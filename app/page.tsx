@@ -872,14 +872,18 @@ export default function Page() {
                 {result?.vendor_id ? ` Vendor ID: ${result.vendor_id}` : ""}
               </div>
               <p className="summary-text">
-                Please check your email. Your onboarding is completed and our team will send credentials and dashboard
-                inventory link shortly.
+                {result?.email_sent === false
+                  ? "Keep your vendor ID for support. Your cafe is already created; please do not submit again."
+                  : "Use the email, password, and cafe PIN in your welcome email to sign in. Choose your subscription and complete payment to unlock the dashboard."}
               </p>
+              {result?.dashboard_url && (
+                <a className="btn primary" href={result.dashboard_url}>Sign in to dashboard</a>
+              )}
             </>
           )}
 
           <div className="actions">
-            <button className="btn ghost" type="button" onClick={goBack} disabled={step === 0 || submitting}>
+            <button className="btn ghost" type="button" onClick={goBack} disabled={step === 0 || step === 4 || submitting}>
               Back
             </button>
 

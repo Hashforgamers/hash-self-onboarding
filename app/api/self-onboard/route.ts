@@ -281,6 +281,8 @@ export async function POST(request: NextRequest) {
       error?: string
       code?: string
       dashboard_url?: string
+      status?: string
+      email_sent?: boolean
     }
 
     if (!response.ok) {
@@ -299,9 +301,12 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         message:
-          "Onboarding submitted successfully. Check your email for confirmation. Credentials and dashboard link will be shared shortly.",
+          data.message || "Your cafe is onboarded. Check your email for sign-in details.",
         vendor_id: data.vendor_id,
-        documents_uploaded: data.documents_uploaded
+        documents_uploaded: data.documents_uploaded,
+        dashboard_url: data.dashboard_url,
+        status: data.status,
+        email_sent: data.email_sent
       },
       { status: 201 }
     )
