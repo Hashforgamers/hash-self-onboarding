@@ -12,6 +12,7 @@ import {
   toPayload,
   validateStep
 } from "@/lib/validation"
+import { toBackendPayload } from "@/lib/submission"
 import MapLocationPicker, { type LocationPayload } from "@/app/components/map-location-picker"
 
 const STEPS = [
@@ -372,7 +373,7 @@ export default function Page() {
     try {
       const payload = toPayload(draft)
       const form = new FormData()
-      form.append("payload", JSON.stringify(payload))
+      form.append("json", JSON.stringify(toBackendPayload(payload)))
 
       for (const key of DOCUMENT_KEYS) {
         const file = documents[key]
@@ -381,14 +382,15 @@ export default function Page() {
         }
       }
 
-      const response = await fetch("/api/self-onboard", {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_SELF_ONBOARD_BACKEND_URL || "https://hfg-onboard.onrender.com").replace(/\/$/, "")}/api/onboard`, {
         method: "POST",
         body: form
       })
 
-      const data = (await response.json()) as SelfOnboardResponse
+      const data = (await response.json().catch(() => ({ message: response.status === 413 ? "Documents are too large. Each document must be 8 MB or smaller." : "The server could not complete onboarding. Please retry." }))) as SelfOnboardResponse
       if (!response.ok) {
-        setError(data.message || "Onboarding failed.")
+        const reference = response.headers.get("X-Request-Id")
+        setError(`${data.message || "Onboarding failed."}${reference ? ` Reference: ${reference}` : ""}`)
         setExistingDashboardUrl(data.dashboard_url || "")
         setSubmitting(false)
         return
